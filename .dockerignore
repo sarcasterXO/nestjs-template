@@ -1,0 +1,40 @@
+# Docker files
+Dockerfile
+docker-compose.yml
+
+# Environment files: secrets come from the runtime environment, never the image
+.env
+.env.*
+
+# Node modules and build artifacts
+node_modules
+dist
+build
+
+# Logs
+logs
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode
+.idea

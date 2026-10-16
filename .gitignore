@@ -1,0 +1,27 @@
+# dependencies
+node_modules
+
+# build output
+dist
+build
+
+# testing
+coverage
+
+# local env files
+.env
+.env.*
+!.env.example
+
+# logs
+*.log*
+
+# typescript
+*.tsbuildinfo
+
+# caches
+.cache
+
+# misc
+.DS_Store
+*.pem

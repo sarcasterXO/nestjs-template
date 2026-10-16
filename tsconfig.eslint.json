@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"emitDecoratorMetadata": true,
+		"noEmit": true
+	},
+	"include": [
+		"src",
+		"tests",
+		"scripts",
+		"vitest.config.ts",
+		"vitest.config.e2e.ts",
+		"process-env.d.ts",
+		"oxlint.config.mts",
+		"oxfmt.config.mts"
+	]
+}

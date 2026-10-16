@@ -1,0 +1,49 @@
+<h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:{{colorText}};">Verification code</h1>
+<div style="height:3px;width:48px;background-color:{{colorBrandCore}};border-radius:2px;margin:0 0 24px;"></div>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:{{colorMuted}};">
+	Hi, use the code below to complete your verification on {{brandName}}. This code keeps your account secure — please
+	don't share it with anyone.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 28px">
+	<tr>
+		<td
+			align="center"
+			style="background-color:{{colorBrandLight}};border:1px solid {{colorBorder}};border-radius:10px;padding:28px 24px;"
+		>
+			<div
+				style="font-size:12px;font-weight:600;letter-spacing:1.5px;color:{{colorBrandDark}};text-transform:uppercase;margin-bottom:12px;"
+			>
+				Verification code
+			</div>
+			<div
+				style="font-family:'SF Mono','Menlo','Consolas',monospace;font-size:36px;font-weight:700;letter-spacing:10px;color:{{colorBrandDark}};"
+			>
+				{{otp}}
+			</div>
+			<div style="margin-top:12px;font-size:12px;color:{{colorMuted}};">Valid for {{validMinutes}} minutes</div>
+		</td>
+	</tr>
+</table>
+<table
+	role="presentation"
+	width="100%"
+	cellpadding="0"
+	cellspacing="0"
+	style="background-color:{{colorWarningBg}};border-left:3px solid {{colorWarningBorder}};border-radius:6px;margin:0 0 24px;"
+>
+	<tr>
+		<td style="padding: 14px 16px">
+			<p style="margin:0;font-size:13px;line-height:1.6;color:{{colorWarningText}};">
+				<strong>Security note:</strong> {{brandName}} will never ask you for this code over phone, chat, or email. If
+				you didn't request it, you can safely ignore this message.
+			</p>
+		</td>
+	</tr>
+</table>
+<p style="margin:0;font-size:13px;line-height:1.5;color:{{colorSubtle}};">
+	Trouble with the code? Contact
+	<a href="mailto:{{supportEmail}}" style="color:{{colorBrandCore}};text-decoration:none;font-weight:600;"
+		>{{supportEmail}}</a
+	>
+	and our team will help you out.
+</p>

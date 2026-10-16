@@ -1,0 +1,110 @@
+{
+	"name": "nestjs-template",
+	"version": "0.0.0",
+	"description": "Opinionated NestJS starter template with auth, users, audit logging, notifications, mail, S3 uploads, MongoDB and Zod validation baked in.",
+	"type": "module",
+	"imports": {
+		"#app/mongoose": "./dist/lib/mongo/index.js",
+		"#app/mongoose/*": "./dist/lib/mongo/*.js",
+		"#lib/*": "./dist/lib/*",
+		"#zod": "./dist/lib/zod/index.js"
+	},
+	"scripts": {
+		"dev": "nest start --watch --env-file .env",
+		"build": "nest build",
+		"start": "bun dist/main.js",
+		"lint": "oxlint --fix .",
+		"lint:check": "oxlint .",
+		"format": "oxfmt",
+		"format:check": "oxfmt --check",
+		"test": "vitest run",
+		"postinstall": "husky .github/husky",
+		"test:watch": "vitest",
+		"test:debug": "vitest --inspect-brk --inspect --logHeapUsage --no-file-parallelism",
+		"test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+		"sync": "bun ./src/lib/scripts/sync.ts",
+		"typecheck": "tsc -p tsconfig.eslint.json",
+		"lint-staged": "lint-staged",
+		"preflight": "bun format && bun typecheck && bun lint && bun run build"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.1152.0",
+		"@fastify/helmet": "^13.2.0",
+		"@fastify/static": "^10.1.6",
+		"@golevelup/nestjs-rabbitmq": "^9.1.0",
+		"@nestjs/common": "^12.1.3",
+		"@nestjs/config": "^12.0.1",
+		"@nestjs/core": "^12.1.3",
+		"@nestjs/jwt": "^12.0.3",
+		"@nestjs/mongoose": "^12.0.0",
+		"@nestjs/platform-fastify": "^12.1.3",
+		"@nestjs/swagger": "12.0.2",
+		"@sapphire/snowflake": "^3.5.5",
+		"@swc/helpers": "^0.5.23",
+		"argon2": "^0.45.1",
+		"exceljs": "^4.4.0",
+		"fastify": "5.12.5",
+		"heic-convert": "^2.1.0",
+		"mime-types": "^3.0.2",
+		"mongoose": "^9.11.2",
+		"nodemailer": "^10.1.1",
+		"rxjs": "^7.8.2",
+		"sharp": "^0.35.5",
+		"undici": "^8.12.1",
+		"web-push": "^3.6.7",
+		"zod": "^4.6.7"
+	},
+	"devDependencies": {
+		"@commitlint/cli": "^21.2.3",
+		"@commitlint/config-conventional": "^21.2.3",
+		"@imranbarbhuiya/oxc-config": "^0.2.3",
+		"@nestjs/cli": "^12.0.8",
+		"@nestjs/schematics": "^12.0.7",
+		"@nestjs/testing": "^12.1.3",
+		"@swc/cli": "^0.8.1",
+		"@swc/core": "^1.16.18",
+		"@types/bun": "^1.4.3",
+		"@types/heic-convert": "^2.1.1",
+		"@types/mime-types": "^3.0.1",
+		"@types/node": "^24.19.2",
+		"@types/web-push": "^3.6.4",
+		"@vitest/coverage-v8": "^5.0.5",
+		"cz-conventional-changelog": "^3.3.0",
+		"husky": "^9.1.7",
+		"json-schema-to-zod": "^2.8.1",
+		"lint-staged": "^17.6.0",
+		"mongodb-memory-server": "^11.3.0",
+		"mongoose-schema-jsonschema": "npm:mongoose-schema-jsonschema@4.0.1",
+		"oxfmt": "^0.73.0",
+		"oxlint": "^1.88.0",
+		"oxlint-tsgolint": "^7.0.2004",
+		"typescript": "^6.0.3",
+		"unplugin-swc": "^2.0.0",
+		"vitest": "^5.0.5"
+	},
+	"resolutions": {
+		"bson": "7.3.3"
+	},
+	"lint-staged": {
+		"*": "oxfmt --no-error-on-unmatched-pattern",
+		"*.{js,cjs,mjs,ts,cts,mts}": "oxlint --fix",
+		"src/lib/mongo/schemas/*.ts": "bun run sync"
+	},
+	"commitlint": {
+		"extends": [
+			"@commitlint/config-conventional"
+		]
+	},
+	"config": {
+		"commitizen": {
+			"path": "./node_modules/cz-conventional-changelog"
+		}
+	},
+	"engines": {
+		"node": ">=24.16.0"
+	},
+	"packageManager": "bun@1.4.3",
+	"patchedDependencies": {
+		"mongoose-schema-jsonschema@4.0.1": "patches/mongoose-schema-jsonschema-npm-4.0.1-14b522d1c0.patch"
+	}
+}

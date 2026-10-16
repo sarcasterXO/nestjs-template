@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="color-scheme" content="light only" />
+		<meta name="supported-color-schemes" content="light only" />
+		<title>{{title}}</title>
+		<style>
+			:root { color-scheme: light only; supported-color-schemes: light only; }
+			@media (prefers-color-scheme: dark) {
+				body, table, td { background-color: {{colorBg}} !important; color: {{colorText}} !important; }
+				.surface { background-color: {{colorSurface}} !important; color: {{colorText}} !important; }
+			}
+		</style>
+	</head>
+	<body
+		style="margin:0;padding:0;background-color:{{colorBg}};font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{{colorText}};"
+	>
+		<div style="display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent">{{preheader}}</div>
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:{{colorBg}};">
+			<tr>
+				<td align="center" style="padding: 40px 16px">
+					<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%">
+						<tr>
+							<td
+								align="center"
+								style="background:linear-gradient(135deg, {{colorBrandDark}} 0%, {{colorBrandCore}} 100%);padding:36px 40px;border-radius:12px 12px 0 0;"
+							>
+								<div style="font-size:22px;font-weight:700;letter-spacing:1.5px;color:{{colorSurface}};">
+									{{brandName}}
+								</div>
+								<div style="margin-top:6px;font-size:12px;letter-spacing:0.5px;color:{{colorBrandLight}};">
+									{{companyName}}
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="surface" style="background-color:{{colorSurface}};padding:40px;">{{{body}}}</td>
+						</tr>
+						<tr>
+							<td style="background-color:{{colorBrandDark}};padding:24px 40px;border-radius:0 0 12px 12px;">
+								<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+									<tr>
+										<td align="center" style="font-size:12px;line-height:1.6;color:{{colorBrandLight}};">
+											Need help? Contact
+											<a
+												href="mailto:{{supportEmail}}"
+												style="color:{{colorSurface}};text-decoration:none;font-weight:600;"
+												>{{supportEmail}}</a
+											>
+										</td>
+									</tr>
+									<tr>
+										<td align="center" style="padding-top:10px;font-size:11px;color:{{colorBrandLight}};opacity:0.85;">
+											&copy; {{year}} {{companyName}}. All rights reserved.
+										</td>
+									</tr>
+									<tr>
+										<td align="center" style="padding-top:4px;font-size:11px;color:{{colorBrandLight}};opacity:0.7;">
+											This is an automated message — please do not reply.
+										</td>
+									</tr>
+								</table>
+							</td>
+						</tr>
+					</table>
+				</td>
+			</tr>
+		</table>
+	</body>
+</html>

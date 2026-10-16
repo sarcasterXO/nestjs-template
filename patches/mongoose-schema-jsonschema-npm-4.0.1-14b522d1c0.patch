@@ -1,0 +1,62 @@
+diff --git a/lib/schema.js b/lib/schema.js
+index 1abbe04749b94632706ced26ffa5db138893f2c4..ab0e629de498086ddd98cde661dd219cc17eaf32 100644
+--- a/lib/schema.js
++++ b/lib/schema.js
+@@ -27,7 +27,7 @@ function schema_jsonSchema(name) {
+ 
+   if (!this.__jsonSchema || config.get(FORCE_REBUILD)) {
+     this.__buildingSchema = true;
+-    this.__jsonSchema = __build(name, this);
++    this.__jsonSchema = __build(name, this, !!name);
+     this.__buildingSchema = false;
+     if (this.__jsonSchemaId) {
+       this.__jsonSchema = {
+@@ -49,7 +49,7 @@ function schema_jsonSchema(name) {
+ 
+ schema_jsonSchema.__jsonSchemaIdCounter = 0;
+ 
+-function __build(name, schema) {
++function __build(name, schema, inside) {
+   const paths = Object
+     .keys(schema.paths)
+     .filter(path => !/\.\$\*$/.test(path)); // removing Map.item paths
+@@ -68,10 +68,25 @@ function __build(name, schema) {
+     jss = ensurePath(result, path);
+     sch = schema.paths[path].jsonSchema(jss.prop);
+     jss.cont.properties[jss.prop] = sch;
++    if (jss.prop === '_id') {
++      delete result.properties[jss.prop];
++      delete sch.pattern;
++      sch.__required = true;
++    }
++    if (['createdAt', 'updatedAt'].includes(jss.prop) || sch.type === 'array') {
++      sch.__required = true;
++    }
+     if (sch.__required) {
+       jss.cont.required = jss.cont.required || [];
+       jss.cont.required.push(jss.prop);
++    } else if (sch.type && (sch.default === undefined || sch.default === null)) {
++      sch.nullable = true;
++      if (Array.isArray(sch.type) && sch.type.length === 2 && sch.type[1] === 'null') {
++        sch.type = sch.type[0];
++      }
++      delete sch.default;
+     }
++    sch._zodType = schema.paths[path].options._zodType?.toString().replace('() => ', '').trim();
+     delete sch.__required;
+   }
+ 
+diff --git a/lib/types.js b/lib/types.js
+index 47502e7784f604fe3a999ccd2ab96e0dce961d3b..01c561587fe6626b3ada3f2459024d69e4f419db 100644
+--- a/lib/types.js
++++ b/lib/types.js
+@@ -191,7 +191,8 @@ function __describe(name, type) {
+ 
+   if (type instanceof Function) {
+     type = type.name.toLowerCase();
+-    if (type === 'objectid' || type === 'schemaobjectid') {
++    if (type.startsWith('schema')) type = type.slice(6);
++    if (type === 'objectid') {
+       return {
+         type: 'string',
+         pattern: '^[0-9a-fA-F]{24}$',
