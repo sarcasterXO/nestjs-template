@@ -24,9 +24,9 @@ email), S3 uploads, MongoDB, Zod validation. Meant to be cloned and extended per
 | Everything, run before committing | `bun run preflight`                                 |
 
 The git pre-commit hook only runs `lint-staged` (fast, staged files only). `preflight` is the full
-format+typecheck+lint+build check — run it yourself before opening a PR; CI also runs lint, format check,
-unit + e2e tests, build, and typecheck separately. E2E tests boot the whole app against an in-memory MongoDB
-(`mongodb-memory-server`), so they need no Docker or `.env`.
+format+typecheck+lint+build check — run it yourself before opening a PR; CI runs lint, format check,
+build, and typecheck, but not the tests, so run `bun run test` and `bun run test:e2e` locally. E2E tests boot
+the whole app against an in-memory MongoDB (`mongodb-memory-server`), so they need no Docker or `.env`.
 
 After any non-trivial change, run `bun typecheck` and then `bun lint` at minimum; run `bun run build` too if you touched
 module wiring (`app.module.ts`, any `*.module.ts`) since Nest DI errors only surface at bootstrap, not
