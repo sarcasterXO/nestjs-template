@@ -46,7 +46,7 @@ import { User } from '../lib/decorators/user.decorator';
 import { type SuccessDto, SuccessDtoSchema } from '../lib/dtos/response.dto';
 import { RateLimitGuard } from '../lib/guard/rateLimitGuard.guard';
 import { sendPaginated } from '../lib/util/Pagination';
-import { Permissions, permissionsFor } from '../lib/util/Permissions';
+import { Permissions } from '../lib/util/Permissions';
 import { parseSortQuery } from '../lib/util/Sort';
 import { toXlsxBuffer, xlsxFilename, XLSX_CONTENT_TYPE } from '../lib/util/Xlsx';
 
@@ -67,8 +67,8 @@ export class UserController {
 	@UseGuards(new RateLimitGuard(200, 200 / 60))
 	@Auth()
 	@Get('me')
-	public getCurrentUser(@User() user: IUserZodSchema): UserMeDto {
-		return { ...user, permissions: [...permissionsFor(user)] };
+	public async getCurrentUser(@User() user: IUserZodSchema): Promise<UserMeDto> {
+		return this.userService.getMe(user);
 	}
 
 	@SwaggerPaginated('Get all users', PaginatedUsersDtoSchema)

@@ -4,6 +4,7 @@ import { MongoUserService, MongoAuditLogService } from '../lib/mongo';
 import { NotificationsService } from '../lib/notifications';
 import { S3BaseService, S3FolderPaths, type AttachmentInput } from '../lib/s3';
 import { diffObjects } from '../lib/util/Diff';
+import { permissionsFor } from '../lib/util/Permissions';
 import { escapeRegex } from '../lib/util/Regex';
 
 import type { IUserZodSchema } from '../lib/mongo/zod';
@@ -28,22 +29,23 @@ export class UserService extends S3BaseService {
 		return user;
 	}
 
-	public async getAllUsers(query: {
-		limit?: number;
-		page?: number;
-		sort?: Record<string, SortOrder>;
-		name?: string;
-	}): Promise<{ data: IUserZodSchema[]; total: number }> {
+	public async getMe(user: IUserZodSchema) {
+		const [populated] = await this.populateUsers([user]);
+		return populated;
+	}
+
+	public async getAllUsers(query: { limit?: number; page?: number; sort?: Record<string, SortOrder>; name?: string }) {
 		const nameRegex = query.name ? { $regex: escapeRegex(query.name), $options: 'i' } : undefined;
 
 		const filter: QueryFilter<IUserZodSchema> = {
 			deleted: { $ne: true },
 			...(nameRegex ? { $or: [{ name: nameRegex }, { email: nameRegex }] } : {}),
 		};
-		return this.mongoUserService.paginate(filter, query);
+		const { data, total } = await this.mongoUserService.paginate(filter, query);
+		return { data: await this.populateUsers(data), total };
 	}
 
-	public async exportUsers(query: { sort?: Record<string, SortOrder> }): Promise<IUserZodSchema[]> {
+	public async exportUsers(query: { sort?: Record<string, SortOrder> }) {
 		const { data } = await this.getAllUsers(query);
 		return data;
 	}
@@ -142,6 +144,11 @@ export class UserService extends S3BaseService {
 
 	public async sendNotificationToUser(userId: string, message: string) {
 		await this.notificationsService.notifyUser(userId, { title: 'Notification', body: message });
+	}
+
+	// Add any extra per-user data the GET endpoints should return here.
+	private async populateUsers(users: IUserZodSchema[]) {
+		return users.map((user) => ({ ...user, permissions: [...permissionsFor(user)] }));
 	}
 
 	private async updateAvatar(userId: string, avatar: AttachmentInput | null | undefined, oldUrl?: string | null) {

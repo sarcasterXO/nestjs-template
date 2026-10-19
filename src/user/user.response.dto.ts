@@ -20,8 +20,9 @@ const updateUserResponseSchema = z.object({
 export const UpdateUserResponseDtoSchema = updateUserResponseSchema.meta({ id: 'UpdateUserResponseDto' });
 export type UpdateUserResponseDto = z.infer<typeof UpdateUserResponseDtoSchema>;
 
-const meSchema = userBaseSchema.extend({ permissions: z.array(z.enum(AllPermissions)) });
-export const UserMeDtoSchema = meSchema.meta({ id: 'UserMeDto' });
+const populatedUserSchema = userBaseSchema.extend({ permissions: z.array(z.enum(AllPermissions)) });
+
+export const UserMeDtoSchema = populatedUserSchema.meta({ id: 'UserMeDto' });
 export type UserMeDto = z.infer<typeof UserMeDtoSchema>;
 
 const registerResponseSchema = userBaseSchema.extend({
@@ -39,5 +40,5 @@ export type LogoutDto = z.infer<typeof LogoutDtoSchema>;
 export const ChangePasswordResponseDtoSchema = logoutSchema.meta({ id: 'ChangePasswordResponseDto' });
 export type ChangePasswordResponseDto = z.infer<typeof ChangePasswordResponseDtoSchema>;
 
-export const PaginatedUsersDtoSchema = paginatedSchema(userBaseSchema).meta({ id: 'PaginatedUsersDto' });
+export const PaginatedUsersDtoSchema = paginatedSchema(populatedUserSchema).meta({ id: 'PaginatedUsersDto' });
 export type PaginatedUsersDto = z.infer<typeof PaginatedUsersDtoSchema>;
