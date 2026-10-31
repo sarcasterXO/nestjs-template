@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
-import convert from 'heic-convert';
-import sharp from 'sharp';
+import decodeHeic from 'heic-decode';
+import sharp, { type Sharp } from 'sharp';
 import { request } from 'undici';
 
 /**
@@ -32,17 +32,12 @@ export const fetchBuffer = async (input: string | Buffer): Promise<Buffer | null
 	}
 };
 
-const convertHeicToJpeg = async (buffer: Buffer, quality: number): Promise<Buffer> =>
-	Buffer.from(
-		await convert({
-			buffer: new Uint8Array(buffer),
-			format: 'JPEG',
-			quality,
-		}),
-	);
+/** ~40 megapixels, enough for any phone photo; sharp's default (268 MP) lets a small file decode into gigabytes. */
+const MAX_INPUT_PIXELS = 40_000_000;
+/** sharp also decodes SVG, GIF, TIFF and more; uploads only ever need these (HEIC is decoded separately). */
+const DECODABLE_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
-const convertWithSharp = async (buffer: Buffer, to: 'jpeg' | 'png' | 'webp', quality: number): Promise<Buffer> => {
-	const image = sharp(buffer);
+const encode = async (image: Sharp, to: 'jpeg' | 'png' | 'webp', quality: number): Promise<Buffer> => {
 	switch (to) {
 		case 'webp':
 			return Buffer.from(await image.webp({ quality }).toBuffer());
@@ -53,18 +48,43 @@ const convertWithSharp = async (buffer: Buffer, to: 'jpeg' | 'png' | 'webp', qua
 	}
 };
 
+/** @types/heic-decode leaves out the dimensions `all()` reads before decoding, and `dispose()`. */
+type HeicImages = ({ width: number; height: number } & Awaited<ReturnType<typeof decodeHeic.all>>[number])[] & {
+	dispose: () => void;
+};
+
+/**
+ * Decodes the first image of a HEIC file to raw RGBA for sharp. The dimensions are checked before decoding, so an
+ * oversized image is rejected before it allocates width × height × 4 bytes.
+ */
+const heicToSharp = async (buffer: Buffer) => {
+	const images = (await decodeHeic.all({ buffer })) as HeicImages;
+	try {
+		const first = images.at(0);
+		if (!first) throw new Error('HEIC file contains no image');
+		if (first.width * first.height > MAX_INPUT_PIXELS) {
+			throw new Error(`HEIC image is ${first.width}x${first.height}, over ${MAX_INPUT_PIXELS} pixels`);
+		}
+		const { data, width, height } = await first.decode();
+		return sharp(data, { raw: { width, height, channels: 4 } });
+	} finally {
+		images.dispose();
+	}
+};
+
+const convertWithSharp = async (buffer: Buffer, to: 'jpeg' | 'png' | 'webp', quality: number): Promise<Buffer> => {
+	const image = sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS });
+	const { format } = await image.metadata();
+	// Output drops EXIF, so apply its orientation first or phone photos come out sideways.
+	image.rotate();
+	if (!DECODABLE_FORMATS.has(format)) throw new Error(`Unsupported image format: ${format}`);
+	return encode(image, to, quality);
+};
+
 export const convertImageType = async (
 	buffer: Buffer,
 	type: 'jpeg' | 'png' | 'webp' | 'heic' | 'jpg',
 	to: 'jpeg' | 'png' | 'webp',
-	quality = 1,
-) => {
-	if (type === 'heic') {
-		const jpegBuffer = await convertHeicToJpeg(buffer, quality);
-		if (to === 'jpeg') {
-			return jpegBuffer;
-		}
-		return convertWithSharp(jpegBuffer, to, quality);
-	}
-	return convertWithSharp(buffer, to, quality);
-};
+	/** 1-100, as sharp takes it. */
+	quality = 80,
+) => (type === 'heic' ? encode(await heicToSharp(buffer), to, quality) : convertWithSharp(buffer, to, quality));

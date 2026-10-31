@@ -5,9 +5,10 @@ RUN apk add --no-cache curl
 
 # Download and install the delayed message exchange plugin.
 # Plugin v4.2.0 is built against RabbitMQ server 4.2.x (matches the base image line).
-RUN curl -L https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases/download/v4.2.0/rabbitmq_delayed_message_exchange-4.2.0.ez \
-    -o $RABBITMQ_HOME/plugins/rabbitmq_delayed_message_exchange-4.2.0.ez
+# The sha256 is the release asset's digest on GitHub; re-pin it when bumping the plugin.
+RUN curl -fsSL https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases/download/v4.2.0/rabbitmq_delayed_message_exchange-4.2.0.ez \
+    -o $RABBITMQ_HOME/plugins/rabbitmq_delayed_message_exchange-4.2.0.ez \
+    && echo "f168b2c09810cde3726961d31f38e3408e6a7fbff3929908d6f962061d8e70a1  $RABBITMQ_HOME/plugins/rabbitmq_delayed_message_exchange-4.2.0.ez" | sha256sum -c -
 
 # Enable the plugin
 RUN rabbitmq-plugins enable rabbitmq_delayed_message_exchange
-

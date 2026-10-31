@@ -3,6 +3,7 @@ import process from 'node:process';
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import webPush from 'web-push';
+import { z } from 'zod';
 
 import { MongoUserService, type IUserZodSchema } from '../mongo';
 
@@ -15,6 +16,14 @@ export interface PushPayload {
 }
 
 const SUBSCRIPTION_TTL_DAYS = 60;
+/** Most recent subscriptions kept per user; older ones are dropped on subscribe. */
+const MAX_SUBSCRIPTIONS = 10;
+
+/** The browsers' push services: FCM (Chrome, Edge on Android, Samsung), Mozilla, WNS (Edge) and Apple. */
+const PUSH_SERVICE_HOSTNAME =
+	/^(?:fcm\.googleapis\.com|(?:[\da-z-]+\.)+(?:push\.services\.mozilla\.com|notify\.windows\.com|push\.apple\.com))$/;
+
+export const pushEndpointSchema = z.url({ protocol: /^https$/, hostname: PUSH_SERVICE_HOSTNAME });
 
 @Injectable()
 export class PushNotificationService {
@@ -54,17 +63,23 @@ export class PushNotificationService {
 		userId: string,
 		userAgent?: string,
 	) {
-		const expirationTime = new Date();
+		const now = new Date();
+		const expirationTime = new Date(now);
 		expirationTime.setDate(expirationTime.getDate() + SUBSCRIPTION_TTL_DAYS);
 
+		// Not deduped by user agent: two devices on the same browser version send identical ones.
 		await this.mongoUserService.updateOne(
 			{ id: userId },
-			{ $pull: { subscriptions: userAgent ? { $or: [{ endpoint }, { userAgent }] } : { endpoint } } },
+			{ $pull: { subscriptions: { $or: [{ endpoint }, { expirationTime: { $lte: now } }] } } },
 		);
 
 		const updated = await this.mongoUserService.updateOne(
 			{ id: userId },
-			{ $push: { subscriptions: { endpoint, keys, expirationTime, userAgent } } },
+			{
+				$push: {
+					subscriptions: { $each: [{ endpoint, keys, expirationTime, userAgent }], $slice: -MAX_SUBSCRIPTIONS },
+				},
+			},
 			{},
 			['id'],
 		);
@@ -76,6 +91,8 @@ export class PushNotificationService {
 
 	public async send({ endpoint, keys }: PushSubscription, payload: PushPayload) {
 		if (!this.vapidPublicKey) return;
+		// Subscriptions stored before the endpoint allowlist existed are never sent to.
+		if (!pushEndpointSchema.safeParse(endpoint).success) throw new Error('Push endpoint is not a known push service');
 		await webPush.sendNotification({ endpoint, keys }, JSON.stringify(payload), { TTL: 60 * 60 * 2, urgency: 'high' });
 	}
 }

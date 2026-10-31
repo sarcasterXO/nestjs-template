@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -18,10 +18,17 @@ interface RefreshTokenPayload extends AccessTokenPayload {
 
 type Session = IUserZodSchema['sessions'][number];
 
+const REGISTER_MESSAGE = 'Registration received. Your account is pending admin approval.';
+
 const hashRefreshId = (rid: string) => createHash('sha256').update(rid).digest('hex');
+
+/** Hash of a random password, verified against when the email is unknown so both paths take as long. */
+const DUMMY_PASSWORD_HASH =
+	'$argon2id$v=19$m=65536,p=4,t=3$a1XVpdkScwiMahBsab5rHg$w8Gk+27xap42u+E1B04LVzSOrwd2DRD0GGEtUuesXDM';
 
 @Injectable()
 export class AuthService {
+	private readonly logger = new Logger(AuthService.name);
 	private readonly MAX_SESSIONS = 3;
 	private readonly refreshSecret: string;
 
@@ -35,34 +42,43 @@ export class AuthService {
 	}
 
 	public async register({ name, email, password: plainPassword }: RegisterDto, ip: string) {
-		const existing = await this.userService.findOne({ email });
-		if (existing) throw new BadRequestException('Email already registered.');
-
+		// Hashed up front and the reply is the same either way, so neither the body nor the timing reveals a registered email.
 		const password = await argon2.hash(plainPassword);
 
-		const user = await this.userService.create({
-			name,
-			email,
-			password,
-			status: 'Requested',
-			deleted: false,
-			superAdmin: false,
-		});
+		let user;
+		try {
+			if (await this.userService.exists({ email })) throw new BadRequestException('Document already exists');
+			user = await this.userService.create({
+				name,
+				email,
+				password,
+				status: 'Requested',
+				deleted: false,
+				superAdmin: false,
+			});
+		} catch (error) {
+			// `create` throws the same BadRequestException when a concurrent registration wins the unique index.
+			if (!(error instanceof BadRequestException)) throw error;
+			this.logger.warn(`Registration rejected, email already registered: ${email} - IP: ${ip}`);
+			return { message: REGISTER_MESSAGE };
+		}
 
-		void this.auditService.create({
+		void this.audit({
 			user: { id: user.id, name: user.name },
 			action: 'user created',
 			message: `User Registered: "${user.name}" (ID: ${user.id}) - IP: ${ip} - awaiting admin approval`,
 			documentId: user.id,
 		});
 
-		const { password: _password, ...safeUser } = user;
-		return { ...safeUser, message: 'Registration successful. Your account is pending admin approval.' };
+		return { message: REGISTER_MESSAGE };
 	}
 
 	public async login({ email, password: plainPassword }: LoginDto, userAgent?: string) {
 		const user = await this.userService.findOne({ email, deleted: { $ne: true } }, ['+password']);
-		if (!user) throw new UnauthorizedException('Invalid email or password.');
+		if (!user) {
+			await argon2.verify(DUMMY_PASSWORD_HASH, plainPassword);
+			throw new UnauthorizedException('Invalid email or password.');
+		}
 
 		const isValidPassword = await argon2.verify(user.password, plainPassword);
 		if (!isValidPassword) throw new UnauthorizedException('Invalid email or password.');
@@ -82,25 +98,49 @@ export class AuthService {
 		const session: Session = {
 			id: generateFlake(),
 			refreshHash: hashRefreshId(refreshId),
-			userAgent,
+			// Pipeline updates aren't cast, so an undefined field would be stored as null.
+			...(userAgent ? { userAgent } : {}),
 			createdAt: now,
 			lastUsedAt: now,
 		};
 
-		await this.userService.updateOne(
-			{ id: user.id },
-			{ $pull: { sessions: { createdAt: { $lte: sessionCutoff() } } } },
-		);
+		// One write: drop expired sessions, add the new one, keep the most recently used. `$literal` keeps the
+		// client-sent user agent from being read as a `$field` path.
 		const updatedUser = await this.userService.updateOne(
 			{ id: user.id },
-			{
-				$push: { sessions: { $each: [session], $sort: { lastUsedAt: 1 }, $slice: -this.MAX_SESSIONS } },
-				lastLoginAt: now,
-			},
+			[
+				{
+					$set: {
+						lastLoginAt: now,
+						sessions: {
+							$slice: [
+								{
+									$sortArray: {
+										input: {
+											$concatArrays: [
+												{
+													$filter: {
+														input: { $ifNull: ['$sessions', []] },
+														cond: { $gt: ['$$this.createdAt', sessionCutoff()] },
+													},
+												},
+												{ $literal: [session] },
+											],
+										},
+										sortBy: { lastUsedAt: 1 },
+									},
+								},
+								-this.MAX_SESSIONS,
+							],
+						},
+					},
+				},
+			],
+			{ updatePipeline: true },
 		);
 		if (!updatedUser) throw new UnauthorizedException('Invalid email or password.');
 
-		void this.auditService.create({
+		void this.audit({
 			user: { id: user.id, name: user.name },
 			action: 'user login',
 			message: `User Login: "${user.name}" (ID: ${user.id})`,
@@ -120,7 +160,7 @@ export class AuthService {
 		const password = await argon2.hash(newPassword);
 		await this.userService.updateOne({ id: userId }, { password, sessions: [] });
 
-		void this.auditService.create({
+		void this.audit({
 			user: { id: user.id, name: user.name },
 			action: 'user updated',
 			message: `User Changed Password: "${user.name}" (ID: ${user.id})`,
@@ -175,7 +215,7 @@ export class AuthService {
 		const { sid } = this.jwtService.decode<AccessTokenPayload>(accessToken);
 		await this.userService.updateOne({ id: user.id }, { $pull: { sessions: { id: sid } } });
 
-		void this.auditService.create({
+		void this.audit({
 			user: { id: user.id, name: user.name },
 			action: 'user logout',
 			message: `User Logout: "${user.name}" (ID: ${user.id})`,
@@ -183,6 +223,15 @@ export class AuthService {
 		});
 
 		return { message: 'Logged out successfully' };
+	}
+
+	/** Fire-and-forget, so a failed write is logged rather than left as an unhandled rejection. */
+	private async audit(entry: Parameters<MongoAuditLogService['create']>[0]) {
+		try {
+			await this.auditService.create(entry);
+		} catch (error) {
+			this.logger.error(`Failed to write audit log "${entry.message}"`, error);
+		}
 	}
 
 	private signTokens(userId: string, sid: string, rid: string, refreshExpiresIn: number) {

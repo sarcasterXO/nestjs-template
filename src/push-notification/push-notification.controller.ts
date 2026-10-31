@@ -18,7 +18,7 @@ export class PushNotificationController {
 	// ==================== GET ROUTES ====================
 
 	@Swagger('Get public key', PublicKeyDtoSchema)
-	@UseGuards(new RateLimitGuard(30, 2))
+	@UseGuards(new RateLimitGuard(10, 10 / 60))
 	@Auth()
 	@Get('public-key')
 	getPublicKey(): PublicKeyDto {
@@ -28,7 +28,7 @@ export class PushNotificationController {
 	// ==================== POST ROUTES ====================
 
 	@Swagger('Subscribe to push notifications', SuccessDtoSchema)
-	@UseGuards(new RateLimitGuard(10, 0.5))
+	@UseGuards(new RateLimitGuard(10, 10 / 60))
 	@Auth()
 	@Post('subscribe')
 	subscribe(

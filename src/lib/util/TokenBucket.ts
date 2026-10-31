@@ -50,7 +50,8 @@ export class TokenBucket {
 
 	public takeToken(): boolean {
 		this.refillBucket();
-		if (this.bucket > 0) {
+		// A whole token: the fraction refilled since the last take must not admit an extra request.
+		if (this.bucket >= 1) {
 			this.bucket--;
 			return true;
 		}

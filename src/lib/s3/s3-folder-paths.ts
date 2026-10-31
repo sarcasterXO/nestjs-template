@@ -9,8 +9,11 @@ export const S3FolderPaths = {
  */
 export type S3FolderPath = (typeof S3FolderPaths)[keyof typeof S3FolderPaths] | (string & {});
 
+/**
+ * Keys live under `app/<env>/`, following NODE_ENV like the database name, so an environment's objects pair with its data.
+ */
 export function getS3EnvPrefix(): string {
-	return process.env.DEPLOYED_ENVIRONMENT === 'development' ? 'app/development/' : 'app/production/';
+	return process.env.NODE_ENV === 'production' ? 'app/production/' : 'app/development/';
 }
 
 /**

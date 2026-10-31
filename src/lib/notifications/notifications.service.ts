@@ -39,15 +39,28 @@ export class NotificationsService {
 	 * In-app feed + web push to every live subscription of the user.
 	 */
 	public async notifyUser(userId: string, payload: PushPayload): Promise<void> {
-		const user = await this.mongoUserService.findOne({ id: userId }, ['subscriptions']);
+		const user = await this.mongoUserService.findOne({ id: userId, deleted: { $ne: true } }, [
+			'subscriptions',
+			'status',
+		]);
 		if (!user) throw new NotFoundException('User not found');
 
 		const now = new Date();
-		const subscriptions = user.subscriptions.filter((sub) => !sub.expirationTime || sub.expirationTime > now);
+		const live = user.subscriptions.filter((sub) => !sub.expirationTime || sub.expirationTime > now);
+		// Inactive accounts keep the in-app entry but get no push, even with subscriptions stored before they were deactivated.
+		const pushTo = user.status === 'Accepted' ? live : [];
 
 		await Promise.all([
-			...subscriptions.map(async (sub) => this.sendPush(userId, sub, payload)),
+			...pushTo.map(async (sub) => this.sendPush(userId, sub, payload)),
 			this.saveInApp(userId, payload),
+			...(live.length < user.subscriptions.length
+				? [
+						this.mongoUserService.updateOne(
+							{ id: userId },
+							{ $pull: { subscriptions: { expirationTime: { $lte: now } } } },
+						),
+					]
+				: []),
 		]);
 	}
 
@@ -58,12 +71,18 @@ export class NotificationsService {
 		const [smsSent, emailSent] = await Promise.all([
 			recipient.phone ? this.smsProvider.sendSms(recipient.phone, message.text).then((r) => r.success) : false,
 			recipient.email
-				? this.mailService.sendEmail({
-						to: recipient.email,
-						subject: message.subject,
-						text: message.text,
-						html: message.html,
-					})
+				? this.mailService
+						.sendEmail({
+							to: recipient.email,
+							subject: message.subject,
+							text: message.text,
+							html: message.html,
+						})
+						// Rendering the email can throw; that must not lose the SMS result.
+						.catch((error: unknown) => {
+							this.logger.error(`Failed to send email to ${recipient.email}`, error);
+							return false;
+						})
 				: false,
 		]);
 

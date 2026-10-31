@@ -4,6 +4,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { AuthModule } from './auth/auth.module';
+import { HealthModule } from './health/health.module';
 import { JwtAuthModule } from './lib/auth/jwt-auth.module';
 import { MailModule } from './lib/mail';
 import { LoggerMiddleware } from './lib/middlewares/logger.middleware';
@@ -27,6 +28,7 @@ import { UserModule } from './user/user.module';
 			envFilePath: '.env',
 		}),
 		DatabaseModule,
+		HealthModule,
 		JwtAuthModule,
 		MailModule,
 		NotificationModule,
@@ -41,6 +43,6 @@ import { UserModule } from './user/user.module';
 })
 export class AppModule {
 	public configure(consumer: MiddlewareConsumer) {
-		consumer.apply(LoggerMiddleware).forRoutes('{*path}');
+		consumer.apply(LoggerMiddleware).exclude('health', 'health/{*path}').forRoutes('{*path}');
 	}
 }

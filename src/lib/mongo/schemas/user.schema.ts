@@ -29,6 +29,11 @@ const sessionSchema = createSubSchema({
 	lastUsedAt: { type: SchemaTypes.Date, required: true },
 });
 
+const phoneSchema = createSubSchema({
+	countryCode: { type: SchemaTypes.String, required: true, trim: true },
+	number: { type: SchemaTypes.String, required: true, trim: true },
+});
+
 export const UserSchema = new Schema<IUserZodSchema>(
 	{
 		id: { type: SchemaTypes.String, default: generateFlake, required: true, unique: true, immutable: true },
@@ -36,7 +41,8 @@ export const UserSchema = new Schema<IUserZodSchema>(
 		email: { type: SchemaTypes.String, required: true },
 		password: { type: SchemaTypes.String, required: true, select: false },
 		avatarUrl: { type: SchemaTypes.String, required: false },
-		subscriptions: { type: [pushSubscriptionSchema], default: [] },
+		phone: { type: phoneSchema, required: false },
+		subscriptions: { type: [pushSubscriptionSchema], default: [], select: false },
 		lastLoginAt: { type: SchemaTypes.Date, required: false },
 		sessions: { type: [sessionSchema], default: [], select: false },
 		deleted: { type: SchemaTypes.Boolean, default: false },
@@ -53,3 +59,5 @@ export const UserSchema = new Schema<IUserZodSchema>(
 );
 
 UserSchema.index({ email: 1 }, { unique: true });
+// For the user list's `name` prefix match.
+UserSchema.index({ name: 1 });

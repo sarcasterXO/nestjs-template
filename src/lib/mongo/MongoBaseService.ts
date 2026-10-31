@@ -3,6 +3,7 @@ import {
 	Model,
 	type QueryFilter,
 	type UpdateQuery,
+	type UpdateWithAggregationPipeline,
 	type QueryOptions,
 	type MongooseUpdateQueryOptions,
 	type SortOrder,
@@ -53,10 +54,12 @@ export interface FindOptions {
 	sort?: Record<string, SortOrder>;
 }
 
-export interface PaginateOptions {
+export interface PaginateOptions<K extends PropertyKey = string> {
 	page?: number;
 	limit?: number;
 	sort?: Record<string, SortOrder>;
+	/** Fields to fetch, e.g. only the columns an export writes. Omit to fetch the whole document. */
+	select?: readonly K[];
 }
 
 export interface IModelOperations<TInput, TOutput> {
@@ -109,13 +112,13 @@ export interface IModelOperations<TInput, TOutput> {
 	updateOne: {
 		<K extends keyof TOutput>(
 			query: QueryFilter<TOutput>,
-			data: UpdateQuery<TInput>,
+			data: UpdateQuery<TInput> | UpdateWithAggregationPipeline,
 			options: QueryOptions<TInput>,
 			select: SelectWithExcludeAndInclude<K>[],
 		): Promise<Pick<TOutput, K> | null>;
 		<S extends SelectType<TOutput>>(
 			query: QueryFilter<TOutput>,
-			data: UpdateQuery<TInput>,
+			data: UpdateQuery<TInput> | UpdateWithAggregationPipeline,
 			options?: QueryOptions<TInput>,
 			select?: S,
 		): Promise<SelectReturn<TOutput, S> | null>;
@@ -198,20 +201,20 @@ export abstract class MongoBaseService<TInput, TOutput = TInput> implements IMod
 
 	public async updateOne<K extends keyof TOutput>(
 		query: QueryFilter<TOutput>,
-		data: UpdateQuery<TInput>,
+		data: UpdateQuery<TInput> | UpdateWithAggregationPipeline,
 		options: QueryOptions<TInput>,
 		select: SelectWithExcludeAndInclude<K>[],
 	): Promise<Pick<TOutput, K> | null>;
 	public async updateOne<S extends SelectType<TOutput>>(
 		query: QueryFilter<TOutput>,
-		data: UpdateQuery<TInput>,
+		data: UpdateQuery<TInput> | UpdateWithAggregationPipeline,
 		options?: QueryOptions<TInput>,
 		select?: S,
 	): Promise<SelectReturn<TOutput, S> | null>;
 
 	public async updateOne<K extends keyof TOutput | SelectType<TOutput>>(
 		query: QueryFilter<TOutput>,
-		data: UpdateQuery<TInput>,
+		data: UpdateQuery<TInput> | UpdateWithAggregationPipeline,
 		options: QueryOptions<TInput> = {},
 		select: SelectWithExcludeAndInclude<K>[] | K = '' as K,
 	): Promise<TOutput | null> {
@@ -272,14 +275,18 @@ export abstract class MongoBaseService<TInput, TOutput = TInput> implements IMod
 	}
 
 	/**
-	 * Find + count in parallel. Without `page` it returns every match; `limit` defaults to 10.
+	 * Find + count in parallel. `page` defaults to 1 and `limit` to 10, so a page is always bounded.
+	 * `id` is appended to `sort` as a tiebreaker so pages stay stable, which relies on every schema keeping a unique `id`.
 	 */
-	public async paginate(
+	public async paginate<K extends keyof TOutput = keyof TOutput>(
 		query: QueryFilter<TOutput>,
-		{ page, limit = 10, sort }: PaginateOptions = {},
-	): Promise<{ data: TOutput[]; total: number }> {
-		const range = page === undefined ? {} : { skip: limit * (page - 1), limit };
-		const [data, total] = await Promise.all([this.findMany(query, '', { ...range, sort }), this.count(query)]);
+		{ page = 1, limit = 10, sort, select }: PaginateOptions<K> = {},
+	): Promise<{ data: Pick<TOutput, K>[]; total: number }> {
+		const stableSort = sort && !('id' in sort) ? { ...sort, id: Object.values(sort).at(-1) ?? -1 } : sort;
+		const [data, total] = await Promise.all([
+			this.findMany(query, select ?? '', { skip: limit * (page - 1), limit, sort: stableSort }),
+			this.count(query),
+		]);
 		return { data, total };
 	}
 
@@ -309,6 +316,18 @@ export abstract class MongoBaseService<TInput, TOutput = TInput> implements IMod
 			console.error(`Error aggregating documents: ${error.message}`);
 			throw new MongoError(`Error aggregating documents: ${error.message}`);
 		}
+	}
+
+	/**
+	 * Counts matches per distinct value of `groupKey` (a `$field` path) in one aggregation.
+	 */
+	public async countBy(query: QueryFilter<TOutput>, groupKey: `$${string}`): Promise<Map<string, number>> {
+		const rows: { key: string; count: number }[] = await this.aggregate([
+			{ $match: query },
+			{ $sortByCount: groupKey },
+			{ $replaceWith: { key: '$_id', count: '$count' } },
+		]);
+		return new Map(rows.map(({ key, count }) => [key, count]));
 	}
 
 	private async findMany(

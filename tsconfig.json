@@ -40,6 +40,6 @@
 			"#zod": ["./src/lib/zod/"]
 		}
 	},
-	"include": ["src/**/*", "process-env.d.ts", "scripts/**/*"],
+	"include": ["src/**/*", "process-env.d.ts"],
 	"exclude": ["node_modules"]
 }

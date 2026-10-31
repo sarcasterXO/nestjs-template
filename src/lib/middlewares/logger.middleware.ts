@@ -2,6 +2,8 @@ import { Buffer } from 'node:buffer';
 
 import { Injectable, Logger, type NestMiddleware } from '@nestjs/common';
 
+import { clientIp } from '../util/Util';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const LOGGED_BODY_STATUSES = new Set([400, 403, 422]);
@@ -39,7 +41,7 @@ export class LoggerMiddleware implements NestMiddleware {
 	private logger = new Logger('HTTP');
 
 	public use(req: FastifyRequest & { user?: { id: string } }, res: FastifyReply['raw'], next: () => void) {
-		const { method, originalUrl, ip } = req;
+		const { method, originalUrl } = req;
 		if (method === 'OPTIONS') return next();
 		const now = Date.now();
 
@@ -75,7 +77,10 @@ export class LoggerMiddleware implements NestMiddleware {
 				`${statusColor}${padLogger(statusCode, loggerColumnWidths.status)}${loggerColors.reset}`,
 				padLogger(truncatedRoute, loggerColumnWidths.route),
 				padLogger(userId, loggerColumnWidths.userId),
-				padLogger(`${(req.headers['x-request-origin'] as string | undefined) ?? '-'} | ${ip}`, loggerColumnWidths.ip),
+				padLogger(
+					`${(req.headers['x-request-origin'] as string | undefined) ?? '-'} | ${clientIp(req)}`,
+					loggerColumnWidths.ip,
+				),
 				padLogger(`${time}ms`, loggerColumnWidths.time),
 			].join(' | ');
 

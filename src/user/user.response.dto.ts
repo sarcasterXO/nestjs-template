@@ -25,7 +25,8 @@ const populatedUserSchema = userBaseSchema.extend({ permissions: z.array(z.enum(
 export const UserMeDtoSchema = populatedUserSchema.meta({ id: 'UserMeDto' });
 export type UserMeDto = z.infer<typeof UserMeDtoSchema>;
 
-const registerResponseSchema = userBaseSchema.extend({
+// Only a message: echoing the account back would reveal whether the email was already registered.
+const registerResponseSchema = z.object({
 	message: z.string(),
 });
 export const RegisterResponseDtoSchema = registerResponseSchema.meta({ id: 'RegisterResponseDto' });

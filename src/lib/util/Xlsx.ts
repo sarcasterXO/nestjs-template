@@ -1,8 +1,20 @@
 import { Buffer } from 'node:buffer';
 
+import { BadRequestException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 
 const TEXT_NUM_FMT = '@';
+
+/** Exports build the whole workbook in memory, so they stop at this many rows. */
+export const MAX_XLSX_EXPORT_ROWS = 50_000;
+
+export function assertXlsxExportSize(total: number) {
+	if (total > MAX_XLSX_EXPORT_ROWS) {
+		throw new BadRequestException(
+			`${total} rows match. Narrow the filters to export ${MAX_XLSX_EXPORT_ROWS} rows or fewer.`,
+		);
+	}
+}
 
 export interface XlsxColumn<T> {
 	header: string;

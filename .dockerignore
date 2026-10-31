@@ -1,10 +1,23 @@
 # Docker files
 Dockerfile
+Dockerfile.rabbitmq
 docker-compose.yml
+docker-setup.sh
+docker-setup.ps1
 
 # Environment files: secrets come from the runtime environment, never the image
 .env
 .env.*
+
+# Version control, CI, git hooks and agent files
+.git
+.github
+.claude
+
+# Tests and docs are not needed to build the app
+tests
+docs
+*.md
 
 # Node modules and build artifacts
 node_modules

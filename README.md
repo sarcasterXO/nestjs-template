@@ -20,6 +20,7 @@ wired up so you don't set it up again for every new project.
 | Queue         | RabbitMQ (`@golevelup/nestjs-rabbitmq`) with the delayed-message-exchange plugin        |
 | Storage       | AWS S3 upload/cleanup helpers, used by the user avatar flow as a working example        |
 | Audit log     | Append-only action log, queryable/exportable with `AuditLog.*`                          |
+| Health        | `GET /health` readiness (Mongo, heap, RabbitMQ when enabled) + `GET /health/live`       |
 | Docs          | Swagger UI at `/docs` in development, generated from Zod schemas                        |
 | Quality       | Oxlint + Oxfmt (`@imranbarbhuiya/oxc-config`), Husky pre-commit, Vitest                 |
 
@@ -27,7 +28,14 @@ Authorization is role-based: every user has a `role` (`Admin` or `User`) and rou
 `@RequirePermissions(...)`. `user.superAdmin` passes every check. The catalog and role grants live in
 `src/lib/util/Permissions.ts`; `GET /roles` and `GET /roles/permissions` expose them, and `GET /users/me` returns
 the caller's effective `permissions`. `Admin` gets every permission; `User` gets none, so it can only read and
-update its own profile through `/users/me`. Only super admins can update or delete a super admin account.
+update its own profile through `/users/me`. Only super admins can update or delete a super admin account, and
+changing another user's `role` also needs `Users.Manage`, not just `Users.Update`. `PATCH /users/me` only takes
+name, email, phone and avatar, and changing the email needs `currentPassword`. Nobody, super admins included, can
+change their own role or status.
+
+Deleting a user is a soft delete (`deleted: true`), and the email stays reserved by the unique index: the same
+address can't register again or be given to another account. Registering with it gets the usual "pending approval"
+reply, but no account is created.
 
 Responses are filtered through the route's response DTO: fields the DTO doesn't declare (`_id`, `password`,
 `sessions`, push `subscriptions`) are stripped before they leave the API.
@@ -102,6 +110,7 @@ src/
 ├── main.ts                # Fastify bootstrap, Swagger, @fastify/helmet, CORS
 ├── audit-log/              # Audit log module
 ├── auth/                   # Register / login / refresh / logout / change password
+├── health/                 # GET /health (readiness) and /health/live, via @nestjs/terminus
 ├── user/                   # Profile + admin user management
 ├── notification/           # In-app notification feed
 ├── push-notification/      # Web push VAPID key + subscribe routes
@@ -130,8 +139,8 @@ Copy the pattern of the existing modules:
 3. Add a `Mongo<Name>Service extends MongoBaseService<I<Name>ZodSchema>` under `src/lib/mongo/<name>/`, then
    register the schema + service in `database.module.ts` and export both from `src/lib/mongo/index.ts`.
 4. Create `src/<name>/` with a controller, service, module, and request/response DTOs: a Zod schema
-   (`FooDtoSchema`) and its `z.infer` type (`FooDto`), wired in with `@Body({ schema: FooDtoSchema })`. Protect routes with `@Auth()`, `@RequirePermissions(...)` or `@SuperAdmin()`; put `@UseGuards(new RateLimitGuard(...))`
-   above them so the limit keys on the user. Pass the response DTO to `@Swagger()` / `@SwaggerPaginated()` —
+   (`FooDtoSchema`) and its `z.infer` type (`FooDto`), wired in with `@Body({ schema: FooDtoSchema })`. Protect routes with `@Auth()`, `@RequirePermissions(...)` or `@SuperAdmin()`. `@Auth()` always runs its guard first, so a
+   `@UseGuards(new RateLimitGuard(...))` keys on the user in any decorator order. Pass the response DTO to `@Swagger()` / `@SwaggerPaginated()` —
    that's also what strips undeclared fields from the response. If the route takes a `sort` query, pass
    `parseSortQuery` the list of fields clients may sort by.
 5. Import the new module in `src/app.module.ts`.
@@ -150,8 +159,19 @@ are only needed if you use those features.
 **CORS:** `src/main.ts` only allows `http://localhost:<any port>` (`CORS_ORIGINS`). Add your frontend's origin(s)
 there before deploying, or browsers will block its requests.
 
-Request bodies are capped at 50 MB (`bodyLimit` in `src/main.ts`). Attachments are sent base64-encoded in JSON,
-which adds about a third to the file size, so this allows uploads of roughly 37 MB.
+Request bodies are capped at 8 MB (`bodyLimit` in `src/main.ts`) and each attachment at 5 MB (`attachment.dto.ts`).
+Attachments are sent base64-encoded in JSON, which adds about a third to the file size.
+
+Run the API behind a gateway (nginx, Traefik, a load balancer) that sets `X-Real-IP` to the connecting address,
+overwriting any value the client sent. Rate limits, request logs and audit entries read the client IP from that
+header, and fall back to the socket address when it is missing.
+
+## Production image
+
+`docker build .` produces a multi-stage image that runs `dist/main.js` as the non-root `bun` user, with only
+production dependencies. The image does not set `NODE_ENV` or any other variable: supply them from the runtime
+environment (`--env-file`, orchestrator secrets). `NODE_ENV=production` selects the production database name and
+turns Swagger off. Docker's `HEALTHCHECK` polls `/health/live`.
 
 ## Troubleshooting
 

@@ -8,8 +8,8 @@ const listAuditLogsQuerySchema = paginationQuerySchema.extend({
 	sort: z.string().optional(),
 	userId: AuditLogZodSchema.shape.user.shape.id.optional(),
 	action: AuditLogZodSchema.shape.action.optional(),
-	date: z.string().optional().meta({ description: 'ISO date string (e.g. 2024-01-15)' }),
-	search: z.string().optional().meta({ description: 'Search across message field' }),
+	date: z.iso.date().optional().meta({ description: 'UTC day as an ISO date (e.g. 2024-01-15)' }),
+	search: z.string().optional().meta({ description: 'Case-insensitive match on the start of the message' }),
 });
 export const ListAuditLogsQueryDtoSchema = listAuditLogsQuerySchema;
 export type ListAuditLogsQueryDto = z.infer<typeof ListAuditLogsQueryDtoSchema>;

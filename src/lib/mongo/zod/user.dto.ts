@@ -10,6 +10,7 @@ export const UserZodSchema = z.object({
 	email: z.string(),
 	password: z.string(),
 	avatarUrl: z.string().nullish(),
+	phone: z.object({ countryCode: z.string(), number: z.string() }).nullish(),
 	subscriptions: z
 		.array(
 			z.object({

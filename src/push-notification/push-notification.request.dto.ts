@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import { pushEndpointSchema } from '../lib/notifications';
+
 const pushSubscriptionSchema = z.object({
-	endpoint: z.url(),
+	endpoint: pushEndpointSchema,
 	keys: z.object({
 		p256dh: z.string().min(1),
 		auth: z.string().min(1),

@@ -19,7 +19,7 @@ export class RolesController {
 	// ==================== GET ROUTES ====================
 
 	@Swagger('Get all roles with their permissions', RolesDtoSchema)
-	@UseGuards(new RateLimitGuard(20, 1))
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@RequirePermissions([Permissions.Roles.View])
 	@Get()
 	public getRoles(): RolesDto {
@@ -27,7 +27,7 @@ export class RolesController {
 	}
 
 	@Swagger('Get every permission, grouped by category', PermissionGroupsDtoSchema)
-	@UseGuards(new RateLimitGuard(20, 1))
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@RequirePermissions([Permissions.Roles.View])
 	@Get('permissions')
 	public getPermissions(): PermissionGroupsDto {

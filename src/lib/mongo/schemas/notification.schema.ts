@@ -18,7 +18,9 @@ export const NotificationSchema = new Schema<INotificationZodSchema>(
 	{ timestamps: true, versionKey: false },
 );
 
-NotificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+// The feed filters on userId alone, so it needs its own index for the createdAt sort; the unread count uses the other.
+NotificationSchema.index({ userId: 1, createdAt: -1, id: -1 });
+NotificationSchema.index({ userId: 1, read: 1 });
 
 export type INotificationUserId = INotificationZodSchema['userId'];
 export type INotificationMessage = INotificationZodSchema['message'];

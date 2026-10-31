@@ -46,13 +46,23 @@ export class MailService {
 			company,
 			supportEmail: configService.get<string>('MAIL_SUPPORT_EMAIL') || user || 'support@example.com',
 		};
-		this.from = `"${company}" <${configService.get<string>('MAIL_FROM') || user}>`;
+		const fromAddress = configService.get<string>('MAIL_FROM') || user;
+		this.from = `"${company}" <${fromAddress}>`;
+		// `||`, not `??`: an empty `SMTP_PORT=` in .env means the default, not port 0.
+		const port = Number(configService.get<string>('SMTP_PORT') || 587);
+
+		if (host) {
+			if (!fromAddress) throw new Error('MAIL_FROM or SMTP_USER must be set when SMTP_HOST is set');
+			if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+				throw new Error(`SMTP_PORT must be a port number, got "${configService.get<string>('SMTP_PORT')}"`);
+			}
+		}
 
 		this.transporter = host
 			? nodemailer.createTransport({
 					pool: true,
 					host,
-					port: Number(configService.get<string>('SMTP_PORT') ?? 587),
+					port,
 					secure: configService.get<string>('SMTP_SECURE') === 'true',
 					auth: { user, pass: configService.get<string>('SMTP_PASSWORD') },
 				})

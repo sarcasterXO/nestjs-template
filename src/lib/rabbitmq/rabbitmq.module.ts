@@ -18,41 +18,42 @@ export class CommonRabbitMQModule {
 				RabbitMQModule.forRootAsync({
 					imports: [ConfigModule],
 					inject: [ConfigService],
-					useFactory: (configService: ConfigService) => ({
-						exchanges: [
-							{
-								name: DELAYED_NOTI_QUEUE_NAME,
-								type: 'x-delayed-message',
-								options: {
-									arguments: { 'x-delayed-type': 'direct' },
-									durable: true,
-								},
-								createExchangeIfNotExists: true,
-							},
-						],
-						queues: [
-							{
-								name: DELAYED_NOTI_QUEUE_NAME,
-								options: {
-									durable: true,
-									arguments: {
-										'x-delayed-type': 'direct',
+					useFactory: (configService: ConfigService) => {
+						// The queue and exchange names are built from it at import time, so without it they'd be `delayed_undefined`.
+						if (!configService.get<string>('RMQ_QUEUE_NAME')) {
+							throw new Error('RMQ_QUEUE_NAME must be set when RMQ_URI is set');
+						}
+						return {
+							exchanges: [
+								{
+									name: DELAYED_NOTI_QUEUE_NAME,
+									type: 'x-delayed-message',
+									options: {
+										arguments: { 'x-delayed-type': 'direct' },
+										durable: true,
 									},
+									createExchangeIfNotExists: true,
 								},
-								createQueueIfNotExists: true,
-								exchange: DELAYED_NOTI_QUEUE_NAME,
-								routingKey: ['delayed-message'],
+							],
+							queues: [
+								{
+									name: DELAYED_NOTI_QUEUE_NAME,
+									options: { durable: true },
+									createQueueIfNotExists: true,
+									exchange: DELAYED_NOTI_QUEUE_NAME,
+									routingKey: ['delayed-message'],
+								},
+							],
+							uri: configService.getOrThrow('RMQ_URI'),
+							connectionInitOptions: {
+								wait: false,
+								reject: true,
+								timeout: 9_000,
 							},
-						],
-						uri: configService.getOrThrow('RMQ_URI'),
-						connectionInitOptions: {
-							wait: false,
-							reject: true,
-							timeout: 9_000,
-						},
-						logger,
-						prefetchCount: 1,
-					}),
+							logger,
+							prefetchCount: 1,
+						};
+					},
 				}),
 			],
 			exports: [RabbitMQModule, RabbitMQService],

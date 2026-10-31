@@ -22,7 +22,7 @@ export class NotificationController {
 	// ==================== GET ROUTES ====================
 
 	@SwaggerPaginated('Get all notifications', PaginatedNotificationsDtoSchema)
-	@UseGuards(new RateLimitGuard(60, 1)) // 60 requests per minute
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@Auth()
 	@Get()
 	public async findAll(
@@ -35,7 +35,7 @@ export class NotificationController {
 	}
 
 	@Swagger('Get total unread notifications count', z.number())
-	@UseGuards(new RateLimitGuard(100, 1)) // 60 requests per minute
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@Auth()
 	@Get('count/unread')
 	public async getUnreadCount(@User() user: IUserZodSchema): Promise<number> {
@@ -45,7 +45,7 @@ export class NotificationController {
 	// ==================== PATCH ROUTES ====================
 
 	@Swagger('Mark notifications as read', z.boolean())
-	@UseGuards(new RateLimitGuard(50, 50 / 60)) // 50 requests per minute
+	@UseGuards(new RateLimitGuard(20, 20 / 60))
 	@Auth()
 	@Patch('read/all')
 	public async markAllAsRead(@User() user: IUserZodSchema): Promise<boolean> {

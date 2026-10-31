@@ -22,9 +22,8 @@ async function bootstrap() {
 	const app = await NestFactory.create<NestFastifyApplication>(
 		AppModule,
 		new FastifyAdapter({
-			bodyLimit: 50 * 1_024 * 1_024,
-			// Trust X-Forwarded-* only from a reverse proxy on loopback or a private network (e.g. Docker).
-			trustProxy: 'loopback,uniquelocal',
+			// The largest body is one base64 attachment (attachment.dto.ts) plus a few fields.
+			bodyLimit: 8 * 1_024 * 1_024,
 		}),
 		{
 			cors: {
@@ -37,6 +36,7 @@ async function bootstrap() {
 	);
 	await app.register(helmet);
 	app.useGlobalPipes(new ZodValidationPipe());
+	app.enableShutdownHooks();
 
 	const PORT = envService.getOrThrow('PORT');
 

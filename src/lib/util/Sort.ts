@@ -46,7 +46,9 @@ function getNestedValue(obj: any, path: string): any {
 }
 
 export function sortArray<T>(array: T[], sortCriteria: Record<string, number>): T[] {
-	const [field, order] = Object.entries(sortCriteria)[0];
+	const criterion = Object.entries(sortCriteria).at(0);
+	if (!criterion) return [...array];
+	const [field, order] = criterion;
 
 	return [...array].sort((a, b) => {
 		const aValue = getNestedValue(a, field);

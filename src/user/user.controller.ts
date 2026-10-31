@@ -46,7 +46,7 @@ import { User } from '../lib/decorators/user.decorator';
 import { type SuccessDto, SuccessDtoSchema } from '../lib/dtos/response.dto';
 import { RateLimitGuard } from '../lib/guard/rateLimitGuard.guard';
 import { sendPaginated } from '../lib/util/Pagination';
-import { Permissions } from '../lib/util/Permissions';
+import { PermissionLabels, Permissions, permissionsFor } from '../lib/util/Permissions';
 import { parseSortQuery } from '../lib/util/Sort';
 import { toXlsxBuffer, xlsxFilename, XLSX_CONTENT_TYPE } from '../lib/util/Xlsx';
 
@@ -64,7 +64,7 @@ export class UserController {
 	// ==================== GET ROUTES ====================
 
 	@Swagger('Get current user with their effective permissions', UserMeDtoSchema)
-	@UseGuards(new RateLimitGuard(200, 200 / 60))
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@Auth()
 	@Get('me')
 	public async getCurrentUser(@User() user: IUserZodSchema): Promise<UserMeDto> {
@@ -72,7 +72,7 @@ export class UserController {
 	}
 
 	@SwaggerPaginated('Get all users', PaginatedUsersDtoSchema)
-	@UseGuards(new RateLimitGuard(20, 1))
+	@UseGuards(new RateLimitGuard(30, 1))
 	@RequirePermissions([Permissions.Users.View])
 	@Get()
 	public async getAllUsers(
@@ -90,7 +90,7 @@ export class UserController {
 	}
 
 	@ApiOperation({ summary: 'Export users matching filters as XLSX (no pagination)' })
-	@UseGuards(new RateLimitGuard(5, 5 / 60))
+	@UseGuards(new RateLimitGuard(10, 10 / (10 * 60)))
 	@RequirePermissions([Permissions.Users.Export])
 	@Get('export')
 	public async exportUsersXlsx(
@@ -135,18 +135,18 @@ export class UserController {
 	// ==================== PATCH ROUTES ====================
 
 	@Swagger('Update current user profile', APIAuthUserDtoSchema)
-	@UseGuards(new RateLimitGuard(20, 20 / 60))
+	@UseGuards(new RateLimitGuard(20, 20 / (10 * 60)))
 	@Auth()
 	@Patch('me')
 	public async updateMe(
 		@Body({ schema: UpdateMeDtoSchema }) data: UpdateMeDto,
 		@User() user: IUserZodSchema,
 	): Promise<APIAuthUserDto> {
-		return this.userService.updateMe(user.id, data);
+		return this.userService.updateMe(user, data);
 	}
 
 	@Swagger('Update user details', UpdateUserResponseDtoSchema)
-	@UseGuards(new RateLimitGuard(5, 5 / 60))
+	@UseGuards(new RateLimitGuard(30, 30 / 60))
 	@RequirePermissions([Permissions.Users.Update])
 	@ApiParam({ name: 'id', description: 'ID of the user to update' })
 	@Patch(':id')
@@ -157,6 +157,7 @@ export class UserController {
 	): Promise<UpdateUserResponseDto> {
 		const targetUser = await this.userService.findUserById(userId);
 
+		// Nobody, super admins included, changes their own role or status: /users/me only takes profile fields.
 		if (targetUser.id === currentUser.id) {
 			throw new BadRequestException('Cannot update your own account via admin endpoint');
 		}
@@ -165,14 +166,26 @@ export class UserController {
 			throw new ForbiddenException('Only super admins can update a super admin account');
 		}
 
-		const updatedUser = await this.userService.updateUser(userId, data, { id: currentUser.id, name: currentUser.name });
+		// Only Users.Manage assigns roles, so Users.Update alone can't promote an accomplice.
+		if (
+			data.role !== undefined &&
+			data.role !== targetUser.role &&
+			!permissionsFor(currentUser).has(Permissions.Users.Manage)
+		) {
+			throw new ForbiddenException(`Missing required permissions: ${PermissionLabels[Permissions.Users.Manage]}`);
+		}
+
+		const updatedUser = await this.userService.updateUser(targetUser, data, {
+			id: currentUser.id,
+			name: currentUser.name,
+		});
 		return { user: updatedUser, message: 'User updated successfully' };
 	}
 
 	// ==================== DELETE ROUTES ====================
 
 	@Swagger('Delete user', SuccessDtoSchema)
-	@UseGuards(new RateLimitGuard(2, 2 / 60))
+	@UseGuards(new RateLimitGuard(10, 10 / 60))
 	@RequirePermissions([Permissions.Users.Delete])
 	@Delete()
 	public async deleteUser(
@@ -185,15 +198,11 @@ export class UserController {
 			throw new BadRequestException('Cannot delete your own account');
 		}
 
-		if (targetUser.deleted) {
-			throw new BadRequestException('User is already deleted');
-		}
-
 		if (targetUser.superAdmin && !currentUser.superAdmin) {
 			throw new ForbiddenException('Only super admins can delete a super admin account');
 		}
 
-		await this.userService.deleteUser(data.userId, { id: currentUser.id, name: currentUser.name });
+		await this.userService.deleteUser(targetUser, { id: currentUser.id, name: currentUser.name });
 		return { message: 'User deleted successfully', success: true };
 	}
 }

@@ -19,11 +19,10 @@ export const AuditLogSchema = new Schema<IAuditLogZodSchema>(
 		message: { type: String, required: true },
 		user: {
 			type: createSubSchema({
-				id: { type: SchemaTypes.String, required: true, index: true },
+				id: { type: SchemaTypes.String, required: true },
 				name: { type: SchemaTypes.String, required: false },
 			}),
 			required: true,
-			index: true,
 		},
 		action: {
 			type: SchemaTypes.String,
@@ -40,4 +39,7 @@ export const AuditLogSchema = new Schema<IAuditLogZodSchema>(
 	},
 );
 
-AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.index({ createdAt: -1, id: -1 });
+AuditLogSchema.index({ 'user.id': 1, createdAt: -1, id: -1 });
+// For the `search` prefix match.
+AuditLogSchema.index({ message: 1 });

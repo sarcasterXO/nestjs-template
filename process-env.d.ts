@@ -4,6 +4,7 @@ declare namespace NodeJS {
 		readonly NODE_ENV: 'development' | 'production' | 'test';
 		readonly PORT: string;
 		readonly DISABLE_SWAGGER: 'false' | 'true';
+		readonly HEALTH_HEAP_LIMIT_MB?: string;
 
 		// MongoDB
 		readonly DB_URI: string;
@@ -17,7 +18,6 @@ declare namespace NodeJS {
 		readonly SECRET_ACCESS_KEY: string;
 		readonly AWS_REGION: string;
 		readonly S3_NAME: string;
-		readonly DEPLOYED_ENVIRONMENT?: string;
 
 		// Web push notifications
 		readonly VAPID_PUBLIC_KEY: string;

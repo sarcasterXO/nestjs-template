@@ -21,6 +21,8 @@ export default defineConfig({
 			VAPID_SUBJECT: 'mailto:e2e@example.com',
 			SMTP_HOST: '',
 			RMQ_URI: '',
+			S3_NAME: 'e2e-bucket',
+			AWS_REGION: 'ap-south-1',
 		},
 		hookTimeout: 120_000,
 		testTimeout: 30_000,

@@ -17,6 +17,7 @@ import { Auth } from '../lib/decorators/auth.decorator';
 import { Swagger } from '../lib/decorators/swagger.decorator';
 import { User } from '../lib/decorators/user.decorator';
 import { RateLimitGuard } from '../lib/guard/rateLimitGuard.guard';
+import { clientIp } from '../lib/util/Util';
 import {
 	type APIAuthUserDto,
 	APIAuthUserDtoSchema,
@@ -31,6 +32,12 @@ import {
 import type { IUserZodSchema } from '../lib/mongo/zod';
 import type { FastifyRequest } from 'fastify';
 
+/** Keys the second login limit on the target account, so guessing one password from many IPs is slowed too. */
+const loginEmail = (request: FastifyRequest) => {
+	const { email } = (request.body ?? {}) as { email?: unknown };
+	return typeof email === 'string' ? `email:${email.trim().toLowerCase()}` : undefined;
+};
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -39,18 +46,17 @@ export class AuthController {
 	// ==================== POST ROUTES ====================
 
 	@Swagger('Register a new account (requires admin approval)', RegisterResponseDtoSchema)
-	@UseGuards(new RateLimitGuard(5, 5 / 60))
+	@UseGuards(new RateLimitGuard(20, 20 / (60 * 60)))
 	@Post('register')
 	public async register(
 		@Body({ schema: RegisterDtoSchema }) body: RegisterDto,
 		@Req() req: FastifyRequest,
 	): Promise<RegisterResponseDto> {
-		const { ip } = req;
-		return this.authService.register(body, ip);
+		return this.authService.register(body, clientIp(req));
 	}
 
 	@Swagger('Login with email and password', APIAuthUserDtoSchema)
-	@UseGuards(new RateLimitGuard(10, 10 / 60))
+	@UseGuards(new RateLimitGuard(60, 60 / (5 * 60)), new RateLimitGuard(10, 10 / (15 * 60), loginEmail))
 	@Post('login')
 	public async login(
 		@Body({ schema: LoginDtoSchema }) body: LoginDto,
@@ -60,7 +66,7 @@ export class AuthController {
 	}
 
 	@Swagger('Refresh the access token', APIAuthUserDtoSchema)
-	@UseGuards(new RateLimitGuard(10, 10 / 60))
+	@UseGuards(new RateLimitGuard(60, 1))
 	@Post('refresh')
 	public async refreshToken(@Body({ schema: RefreshDtoSchema }) body: RefreshDto): Promise<APIAuthUserDto> {
 		return this.authService.refresh(body.refreshToken);
@@ -80,7 +86,7 @@ export class AuthController {
 	// ==================== PATCH ROUTES ====================
 
 	@Swagger('Change my password', ChangePasswordResponseDtoSchema)
-	@UseGuards(new RateLimitGuard(5, 5 / 60))
+	@UseGuards(new RateLimitGuard(5, 5 / (15 * 60)))
 	@Auth()
 	@Patch('password')
 	public async changePassword(

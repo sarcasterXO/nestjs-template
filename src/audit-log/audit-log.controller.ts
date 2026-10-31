@@ -31,7 +31,7 @@ export class AuditLogController {
 	// ==================== GET ROUTES ====================
 
 	@SwaggerPaginated('Get all audit logs', PaginatedAuditLogsDtoSchema)
-	@UseGuards(new RateLimitGuard(20, 1))
+	@UseGuards(new RateLimitGuard(30, 1))
 	@RequirePermissions([Permissions.AuditLog.View])
 	@Get()
 	public async getAll(
@@ -49,7 +49,7 @@ export class AuditLogController {
 	}
 
 	@ApiOperation({ summary: 'Export audit logs matching filters as XLSX (no pagination)' })
-	@UseGuards(new RateLimitGuard(5, 5 / 60))
+	@UseGuards(new RateLimitGuard(10, 10 / (10 * 60)))
 	@RequirePermissions([Permissions.AuditLog.Export])
 	@Get('export')
 	public async exportXlsx(
@@ -57,7 +57,7 @@ export class AuditLogController {
 		@Query({ schema: ExportAuditLogsQueryDtoSchema }) query: ExportAuditLogsQueryDto,
 	): Promise<Buffer> {
 		const { sort, ...rest } = query;
-		const { data } = await this.auditLogService.findAll({
+		const data = await this.auditLogService.exportAll({
 			...rest,
 			sort: sort ? parseSortQuery(sort, SORTABLE_FIELDS) : undefined,
 		});

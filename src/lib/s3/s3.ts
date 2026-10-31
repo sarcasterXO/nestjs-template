@@ -2,14 +2,14 @@ import { Buffer } from 'node:buffer';
 import process from 'node:process';
 
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
-import { InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, HttpException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { lookup } from 'mime-types';
 
-import { formatFolderPath, type S3FolderPath } from './s3-folder-paths';
+import { formatFolderPath, getS3EnvPrefix, type S3FolderPath } from './s3-folder-paths';
 import { s3KeyToPublicPath, s3UrlToKey, withAttachmentUrlVersion } from './s3-url.util';
 
 import { convertImageType } from '../util/Image';
-import { IMAGE_EXTENSIONS } from '../util/Regex';
+import { IMAGE_EXTENSIONS, S3CommonUploadRegex } from '../util/Regex';
 
 import type { attachmentUpdateSchema } from '../dtos/attachment.dto';
 import type { z } from 'zod';
@@ -18,7 +18,6 @@ export type AttachmentInput = z.infer<typeof attachmentUpdateSchema>;
 
 const MAX_ATTACHMENT_BASENAME_LENGTH = 30;
 const bucketName = process.env.S3_NAME;
-const envPrefix = process.env.DEPLOYED_ENVIRONMENT === 'development' ? 'development/' : '';
 
 const s3 = new S3Client({
 	region: process.env.AWS_REGION,
@@ -50,7 +49,7 @@ export class S3BaseService {
 
 	public buildS3Key(key: string, folderPath?: S3FolderPath) {
 		const folder = folderPath ? formatFolderPath(folderPath) : this.defaultFolderPath;
-		return `${envPrefix}${folder}${key}`.replaceAll(/\s+/g, '+').toLowerCase();
+		return `${getS3EnvPrefix()}${folder}${key}`.replaceAll(/\s+/g, '+').toLowerCase();
 	}
 
 	public buildPublicS3Url(fullKey: string) {
@@ -58,14 +57,31 @@ export class S3BaseService {
 	}
 
 	/**
-	 * Upload a file to S3, converting images to WebP. The returned url carries a `?v=` upload timestamp.
+	 * Whether `url` is this bucket's public URL of an object under `key/`, e.g. one of a user's own uploads.
+	 */
+	public isOwnS3Url(url: string, key: string, folderPath?: S3FolderPath) {
+		return (
+			URL.canParse(url) && new URL(url).href.startsWith(this.buildPublicS3Url(this.buildS3Key(`${key}/`, folderPath)))
+		);
+	}
+
+	/**
+	 * Upload a file to S3. Images are re-encoded to WebP, so only what sharp can decode is ever stored; other
+	 * files are served as downloads. The returned url carries a `?v=` upload timestamp.
 	 */
 	public async uploadToS3(key: string, body: Buffer, folderPath?: S3FolderPath) {
 		let fullKey = this.buildS3Key(key, folderPath);
+		if (!S3CommonUploadRegex.test(fullKey)) throw new BadRequestException('Unsupported file type.');
 
 		const imageType = IMAGE_EXTENSIONS.find((ext) => fullKey.endsWith(`.${ext}`));
-		if (imageType && imageType !== 'webp') {
-			body = await convertImageType(body, imageType, 'webp', 99);
+		if (imageType) {
+			try {
+				body = await convertImageType(body, imageType, 'webp', 99);
+			} catch {
+				throw new BadRequestException(
+					'Could not read the image. Use a jpg, png, webp or heic image under 40 megapixels.',
+				);
+			}
 			fullKey = fullKey.replace(/\.[^.]+$/, '.webp');
 		}
 
@@ -75,6 +91,7 @@ export class S3BaseService {
 				Key: fullKey,
 				Body: body,
 				ContentType: lookup(fullKey) || 'application/octet-stream',
+				...(imageType ? {} : { ContentDisposition: 'attachment' }),
 			}),
 		);
 
@@ -85,13 +102,15 @@ export class S3BaseService {
 	 * Delete every object under a prefix, e.g. all attachments of one entity
 	 */
 	public async deleteS3Directory(prefix: string, folderPath?: S3FolderPath) {
-		const { Contents = [] } = await s3.send(
-			new ListObjectsV2Command({ Bucket: bucketName, Prefix: this.buildS3Key(prefix, folderPath) }),
-		);
-		const keys = Contents.flatMap(({ Key }) => (Key ? [{ Key }] : []));
-		if (!keys.length) return;
-
-		await s3.send(new DeleteObjectsCommand({ Bucket: bucketName, Delete: { Objects: keys } }));
+		const Prefix = this.buildS3Key(prefix, folderPath);
+		let ContinuationToken: string | undefined;
+		// Both calls cap at 1000 keys, so delete page by page.
+		do {
+			const page = await s3.send(new ListObjectsV2Command({ Bucket: bucketName, Prefix, ContinuationToken }));
+			const keys = (page.Contents ?? []).flatMap(({ Key }) => (Key ? [{ Key }] : []));
+			if (keys.length) await s3.send(new DeleteObjectsCommand({ Bucket: bucketName, Delete: { Objects: keys } }));
+			ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+		} while (ContinuationToken);
 	}
 
 	/**
@@ -105,6 +124,7 @@ export class S3BaseService {
 			const { url } = await this.uploadToS3(`${key}/${normalizeAttachmentName(attachment.name)}`, body, folderPath);
 			return url;
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			this.logger.error(`Failed to upload attachment: ${error instanceof Error ? error.stack : String(error)}`);
 			throw new InternalServerErrorException('Failed to upload attachment', { cause: error });
 		}
