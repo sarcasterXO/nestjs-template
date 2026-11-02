@@ -9,20 +9,20 @@ wired up so you don't set it up again for every new project.
 
 ## What's in the box
 
-| Area          | Choice                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------- |
-| Framework     | NestJS on Fastify                                                                       |
-| Runtime       | Bun                                                                                     |
-| Database      | MongoDB via Mongoose, with a generic `MongoBaseService<T>` CRUD base class              |
-| Validation    | Zod 4 — DTOs are schemas + `z.infer` types, validated by Nest's standard-schema support |
-| Auth          | JWT access + refresh tokens bound to server-side sessions (max 3/user), argon2 hashing  |
-| Notifications | In-app feed + web push (VAPID) + SMS (Unifonic) + email (SMTP/nodemailer, branded HTML) |
-| Queue         | RabbitMQ (`@golevelup/nestjs-rabbitmq`) with the delayed-message-exchange plugin        |
-| Storage       | AWS S3 upload/cleanup helpers, used by the user avatar flow as a working example        |
-| Audit log     | Append-only action log, queryable/exportable with `AuditLog.*`                          |
-| Health        | `GET /health` readiness (Mongo, heap, RabbitMQ when enabled) + `GET /health/live`       |
-| Docs          | Swagger UI at `/docs` in development, generated from Zod schemas                        |
-| Quality       | Oxlint + Oxfmt (`@imranbarbhuiya/oxc-config`), Husky pre-commit, Vitest                 |
+| Area          | Choice                                                                                    |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| Framework     | NestJS on Fastify                                                                         |
+| Runtime       | Bun                                                                                       |
+| Database      | MongoDB via Mongoose, with a generic `MongoBaseService<T>` CRUD base class                |
+| Validation    | Zod 4 — DTOs are schemas + `z.infer` types, validated by Nest's standard-schema support   |
+| Auth          | JWT access + refresh tokens bound to server-side sessions (max 3/user), argon2 hashing    |
+| Notifications | In-app feed + web push (VAPID) + SMS (Unifonic) + email (SMTP/@nestjs/mail, branded HTML) |
+| Queue         | RabbitMQ (`@golevelup/nestjs-rabbitmq`) with the delayed-message-exchange plugin          |
+| Storage       | AWS S3 upload/cleanup helpers, used by the user avatar flow as a working example          |
+| Audit log     | Append-only action log, queryable/exportable with `AuditLog.*`                            |
+| Health        | `GET /health` readiness (Mongo, heap, RabbitMQ when enabled) + `GET /health/live`         |
+| Docs          | Swagger UI at `/docs` in development, generated from Zod schemas                          |
+| Quality       | Oxlint + Oxfmt (`@imranbarbhuiya/oxc-config`), Husky pre-commit, Vitest                   |
 
 Authorization is role-based: every user has a `role` (`Admin` or `User`) and routes declare what they need with
 `@RequirePermissions(...)`. `user.superAdmin` passes every check. The catalog and role grants live in
@@ -185,7 +185,9 @@ turns Swagger off. Docker's `HEALTHCHECK` polls `/health/live`.
   `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are missing or invalid; in development it only warns
   and disables push. Generate a key pair with `npx web-push generate-vapid-keys`.
 - **Emails not arriving** — without `SMTP_HOST`, `MailService` logs emails to the console in development and
-  skips them elsewhere.
+  skips them elsewhere. With it, check the boot line `Mail via SMTP host:port (…)` and the `MailModule` ERROR line,
+  which names the failing SMTP command, the reply code and the server's message. A server that doesn't offer
+  STARTTLS is refused unless `SMTP_SECURE=true` (port 465) or it's localhost.
 
 ## License
 

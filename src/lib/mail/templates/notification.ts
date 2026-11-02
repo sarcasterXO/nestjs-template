@@ -15,12 +15,9 @@ function textToHtml(text: string): string {
 }
 
 /** Plain text rendered as a branded email — blank lines become paragraphs. */
-export const notificationEmail =
-	({ subject, text }: { subject: string; text: string }): MailTemplate =>
-	() => ({
-		template: 'notification',
-		subject,
-		preheader: text.slice(0, 120),
-		vars: { heading: subject, paragraphs: textToHtml(text) },
-		text,
-	});
+export const notificationEmail: MailTemplate<{ subject: string; text: string }> = ({ subject, text }) => ({
+	subject,
+	preheader: text.slice(0, 120),
+	vars: { heading: subject, paragraphs: textToHtml(text) },
+	text,
+});

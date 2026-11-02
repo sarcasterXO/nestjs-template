@@ -6,7 +6,7 @@ email), S3 uploads, MongoDB, Zod validation. Meant to be cloned and extended per
 
 - **Package manager / runtime:** Bun
 - **Stack:** NestJS on Fastify, Mongoose (MongoDB), Zod 4, RabbitMQ (`@golevelup/nestjs-rabbitmq`), AWS S3,
-  argon2, nodemailer, web-push, Vitest
+  argon2, @nestjs/mail, web-push, Vitest
 
 ## Commands
 
@@ -194,25 +194,35 @@ inject services directly.
   `{ countryCode: '+1', number: '5550100' }`; pass `phone: user.phone && phoneToRecipient(user.phone)`
   (`lib/util/Util.ts`) to get the digits-only form `SmsProvider` expects.
 - `SmsProvider.sendSms(phone, body)` for SMS only. To switch vendors, add a class extending `SmsProvider` (implement `dispatch`) and change the `useClass` in `sms.module.ts`.
-- `MailService` for email only. Without `SMTP_HOST`, mail is logged to the console in development and skipped
-  elsewhere.
+- `MailService` for email only, a facade over `@nestjs/mail`'s `Mailer` (SMTP). A failed send is retried once after
+  ~1s, then `send`/`sendEmail` return `false`. Without `SMTP_HOST`, mail goes to `LogMailTransport` in development and
+  is skipped elsewhere. The SMTP server must offer STARTTLS unless `SMTP_SECURE=true` (port 465) or it's localhost.
+  Logs: one boot line with the SMTP host, TLS mode and sender; a WARN per retried attempt; one ERROR per final
+  failure with the SMTP command, code and server reply; `Email sent successfully … Message ID` on success.
 
 ### Mail templates
 
-Every email is a body template rendered into `lib/mail/templates/layout.hbs`. Send one with
-`mailService.send(to, otpEmail({ otp }))` — import the builder from `lib/mail`, pass its args, and the layout,
-brand and theme are applied for you. `mailService.render(...)` returns `{ subject, html, text }` without sending.
+Every email is a body template rendered into `lib/mail/templates/layout.hbs`. Send one by name with its variables:
+`mailService.send(to, 'otp', { otp }, from?, attachments?)`. The name and variables are typed from the registry in
+`templates/index.ts`, so an unknown name or a missing variable is a compile error. The variables argument is optional
+only when every field is. The layout, brand and theme are applied for you. `mailService.render('otp', { otp })`
+returns `{ subject, html, text }` without sending; `mailService.sendEmail({ to, subject, text?, html?, from?, attachments? })` sends pre-built content.
+`from` is an address or `{ name?, address? }` (`{ name: 'Billing' }` keeps the default address). A missing name is
+`MAIL_BRAND_NAME`; a missing address is `MAIL_FROM`, else `SMTP_USER`.
 
-To add an email, create two files in `lib/mail/templates/` and export the builder from `templates/index.ts`:
+To add an email, create two files in `lib/mail/templates/` and add the builder to `builders` in `templates/index.ts`
+under the same `<name>`:
 
 - `<name>.hbs` — the body only, no `<html>`/layout. `{{var}}` is HTML-escaped, `{{{var}}}` is inserted raw (only
   for HTML you built and escaped yourself). Every template also gets `brandName`, `companyName`, `supportEmail`,
   `year` and the `MAIL_THEME` colors (`{{colorBrandCore}}`, …) — use those instead of hex values.
-- `<name>.ts` — `export const <name>Email = (args): MailTemplate => (brand) => ({ template: '<name>', subject,
-  vars, text?, preheader? })`. Copy `otp.ts`.
+- `<name>.ts` — `export const <name>Email: MailTemplate<{ ...variables }> = (variables, brand) => ({ subject, vars,
+  text?, preheader? })`. The type argument is what callers must pass; `vars` are the `.hbs` placeholders. Copy
+  `otp.ts`.
 
-A variable used in the HTML but missing from `vars` throws at send time, so typos don't ship half-rendered
-emails. `nest-cli.json` copies `templates/**/*.hbs` into `dist`; keep templates in that folder.
+Templates render through `StrictTemplateEngine` (`lib/mail/template.ts`, also registered with
+`@nestjs/mail`), so there's no `{{#if}}`/`{{#each}}`/partials. A variable used in the HTML but missing from `vars`
+throws at send time, so typos don't ship half-rendered emails. `nest-cli.json` copies `templates/**/*.hbs` into `dist`; keep templates in that folder.
 
 ### Health checks
 

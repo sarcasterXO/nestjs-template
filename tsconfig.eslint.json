@@ -13,5 +13,6 @@
 		"process-env.d.ts",
 		"oxlint.config.mts",
 		"oxfmt.config.mts"
-	]
+	],
+	"exclude": ["node_modules"]
 }

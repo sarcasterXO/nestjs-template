@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { Injectable } from '@nestjs/common';
+import { MailTemplateEngine } from '@nestjs/mail';
+
 export type TemplateVars = Record<string, number | string>;
 
 export interface MailBrand {
@@ -10,9 +13,8 @@ export interface MailBrand {
 }
 
 export interface MailContent {
-	/** Body template file name in `templates/`, without `.hbs`. Rendered into `layout.hbs` as `{{{body}}}`. */
-	template: string;
 	subject: string;
+	/** Values for the `.hbs` placeholders. Rendered into `layout.hbs` as `{{{body}}}`. */
 	vars?: TemplateVars;
 	/** Plain-text alternative for clients that don't render HTML. */
 	text?: string;
@@ -20,8 +22,8 @@ export interface MailContent {
 	preheader?: string;
 }
 
-/** What a template module exports: takes the template's args, returns content once the brand is known. */
-export type MailTemplate = (brand: MailBrand) => MailContent;
+/** A template builder: takes the caller's variables and the brand, returns what to render. */
+export type MailTemplate<TVars> = (vars: TVars, brand: MailBrand) => MailContent;
 
 /** Available to every template as `{{colorX}}`. */
 export const MAIL_THEME = {
@@ -60,11 +62,20 @@ export function renderTemplate(source: string, vars: TemplateVars): string {
 	});
 }
 
-export async function loadTemplate(name: string): Promise<string> {
+async function loadTemplate(name: string): Promise<string> {
 	let source = templateCache.get(name);
 	if (!source) {
 		source = readFile(join(import.meta.dirname, 'templates', `${name}.hbs`), 'utf8');
 		templateCache.set(name, source);
 	}
 	return source;
+}
+
+/** Renders `templates/<name>.hbs` into `layout.hbs`; a missing variable throws instead of rendering empty. */
+@Injectable()
+export class StrictTemplateEngine extends MailTemplateEngine {
+	public async render(name: string, context: TemplateVars): Promise<string> {
+		const body = renderTemplate(await loadTemplate(name), context);
+		return renderTemplate(await loadTemplate('layout'), { ...context, body });
+	}
 }
