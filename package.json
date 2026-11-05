@@ -23,7 +23,7 @@
 		"test:debug": "vitest --inspect-brk --inspect --logHeapUsage --no-file-parallelism",
 		"test:e2e": "vitest run --config ./vitest.config.e2e.ts",
 		"sync": "bun ./src/lib/scripts/sync.ts",
-		"typecheck": "tsc -p tsconfig.eslint.json",
+		"typecheck": "tsc",
 		"lint-staged": "lint-staged",
 		"preflight": "bun format && bun typecheck && bun lint && bun run build"
 	},
